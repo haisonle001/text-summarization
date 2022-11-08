@@ -1,0 +1,6 @@
+import splitfolders
+
+splitfolders.fixed("/home/redboxsa_ml/shared_data/newscorpus/news-corpus-step2-doc-sep/newshead/greedy_entity_pyramid_pyramid_rouge_0.3_0.5",
+        "/home/redboxsa_ml/shared_data/newscorpus/step2-doc-sep", seed=1234, fixed=( 120), group_prefix=None, move=False)
+
+#mmv newshead.train\* newshead.valid\#1

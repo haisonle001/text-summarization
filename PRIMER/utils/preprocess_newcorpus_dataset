@@ -1,0 +1,156 @@
+# import pandas as pd
+import torch
+from underthesea import sent_tokenize
+from itertools import islice
+import os
+from transformers import AutoTokenizer
+added_tokens = ["<doc-sep>"]
+tokenizer = AutoTokenizer.from_pretrained('vinai/phobert-large',additional_special_tokens=added_tokens)
+
+# from itertools import zip_longest
+
+# corpus_full_dir="C:/Work/NLP text summarization/news-corpus/corpus-full.txt"
+
+"""Chia corpus thành nhiều file txt, mỗi file chứa n dòng
+"""
+# def grouper(n, iterable, fillvalue=None):
+#     "Collect data into fixed-length chunks or blocks"
+#     # grouper(3, 'ABCDEFG', 'x') --> ABC DEF Gxx
+#     args = [iter(iterable)] * n
+#     return zip_longest(fillvalue=fillvalue, *args)
+
+# n = 20000
+
+# with open(corpus_full_dir,encoding="utf8") as f:
+#     for i, g in enumerate(grouper(n, f, fillvalue=''), 1):
+#         with open('news_corpus_text_{0}'.format(i * n), 'w',encoding="utf8") as fout:
+#             fout.writelines(g)
+
+title_full_dir="corpus-title.txt"
+
+title_list=[]
+
+""" title_list chứa tất cả titles 
+"""
+with open(title_full_dir, "r",encoding="utf8") as fp:
+    # access each line
+    for line in fp.readlines():
+        txt=line.strip()
+        title_list.append(txt)
+
+len(title_list),title_list[0]
+
+#Dùng để sử dụng lại title_list 
+title_lis=title_list[:]
+
+
+def preprocess_text(doc_list):
+    """ doc_list là 1 doc. chia doc thành các đoạn nhỏ.
+    output là list chứa các đoạn trong doc.
+    """
+    res=[]
+    temp=' '.join(doc_list)
+    temp=sent_tokenize(temp)
+    # temp=[sent for sent in temp if len(tokenizer(sent)['input_ids'])<=256]
+    # temp=[sent for sent in temp if len(sent.split())<256]
+    # lẽ ra phải là độ dài của doc sau khi dùng sent_tokenizer
+    length=len(temp)
+    if length==1 or length==0:
+        return []
+    if length<10:
+        count=int(len(temp)/2)
+        length_to_split = [count, length-count]
+    elif length<20:
+        count=int(len(temp)/3)
+        length_to_split = [count, count, length- 2*count]
+    elif length<30:
+        count=int(len(temp)/4)
+        length_to_split = [count, count,count, length- 3*count]
+    else:
+        count=int(len(temp)/5)
+        length_to_split = [count, count,count,count, length- 4*count]
+    input = iter(temp)
+    res=[list(islice(input, elem))
+        for elem in length_to_split]
+    return res
+
+
+# temp_title=[]
+def save_file(doc_lis,count):
+    """ 
+    doc_lis là file nội dung txt raw
+    doc_text là list chứa các cluster
+    title_index là list chứa index của titles trong doc_lis
+    used_title là list chứa các tiltes đã được sử dụng
+    temp_text là nội dung cuối các doc_lis, là 1 đoạn văn chưa hoàn chỉnh
+    data_list là output chứa các cluster có title/text, định dạng giống newshead
+    """
+    global title_list
+    title_index=[]
+    doc_text=[]
+    used_title=[]
+    nb=1
+
+    #tìm index các titles trong doc
+    for title in title_list:
+        if title in doc_lis:
+            title_index.append(doc_lis.index(title))
+            used_title.append(title)
+        else: 
+            nb+=1
+            if nb<=50:
+                continue
+            else:
+                break
+
+    #đoạn văn chưa hoàn chỉnh ở cuối file
+    temp_text=doc_lis[title_index[-1]:]
+
+    #đoạn văn hoàn chỉnh
+    for i in range (len(title_index)-1):
+        doc_text.append(preprocess_text(doc_lis[title_index[i]+1:title_index[i+1]]))
+    
+    #title đoạn văn chưa hoàn chỉnh ở cuối file
+    title_index=title_index[:-1]
+    
+    data_list=[]
+    for id in range (len(title_index)):
+        temp_dict={}
+        temp_list=[]
+        for doc in doc_text[id]:
+            temp={}
+            if (len(doc))!=1:
+                temp['title']=title_list[id]
+                temp['text']='\n'.join(doc)
+                temp_list.append(temp)
+        if len(temp_list)!=0:
+            temp_dict['articles']=temp_list
+            data_list.append(temp_dict)
+
+    print(title_list.index(used_title[-1]),len(doc_text))
+
+    #xoá những titles đã sử dụng
+    title_list=title_list[title_list.index(used_title[-1]):]
+
+    #save
+    torch.save(data_list,f'news_corpus_train_again/newshead.train.{count}.pt')
+    print("File saved", len(title_index), title_index[-1])
+    
+    return temp_text
+
+
+splited_news_corpus_txt_dir="news_corpus_text/"
+
+temp_text=[]
+count=0
+
+for file in sorted(os.listdir(splited_news_corpus_txt_dir),key=lambda item: int(item[17:])):
+    file_name=splited_news_corpus_txt_dir+ file
+    count+=1
+    #append đoạn văn chưa hoàn chỉnh của file trước đó                        
+    doc_list=temp_text
+    with open(file_name, "r",encoding="utf8") as fp:
+        for line in fp.readlines():
+            doc_list.append(line.strip())
+    temp_text=save_file(doc_list,count)
+
