@@ -215,13 +215,13 @@ def compute_all_scores_single_data(all_docs, i):
         for doc in all_docs
     ]
     # take much time process very long sequence.
-    if sum([len(d) for d in cluster]) > 600:
+    # if sum([len(d) for d in cluster]) > 600:
         # output=rdrsegmenter.word_segment(s)
         # segmented_text= ''.join(output) 
-        return [
-            [{"text": s, "pegasus_score": 0, "pyramid_rouge": 0} for s in d]
-            for d in cluster
-        ]
+        # return [
+        #     [{"text": s, "pegasus_score": 0, "pyramid_rouge": 0} for s in d]
+        #     for d in cluster
+        # ]
     scorer = rouge_scorer.RougeScorer(
         ["rouge1", "rouge2", "rougeL", "rougeLsum"], use_stemmer=True
     )

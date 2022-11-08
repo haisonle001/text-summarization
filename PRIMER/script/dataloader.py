@@ -47,7 +47,7 @@ class SummarizationDataset(Dataset):
     def __getitem__(self, idx):
         entry = self.hf_dataset[idx]
         # single doc setting
-        if self.dataset_name == "pubmed":
+        if self.dataset_name == "single_doc":
             src = entry["article"]
             tgt = entry["abstract"]
             input_ids = self.tokenizer.encode(
@@ -57,31 +57,8 @@ class SummarizationDataset(Dataset):
                 tgt, truncation=True, max_length=self.max_output_len
             )
         else:  # multi-doc setting
-            if self.dataset_name == "multi_news":
-                all_docs = entry["document"].split("|||||")[:-1]
-                for i, doc in enumerate(all_docs):
-                    doc = doc.replace("\n", " ")
-                    doc = " ".join(doc.split())
-                    all_docs[i] = doc
-                tgt = entry["summary"]
-            elif self.dataset_name == "multi_x_science_sum":
-                all_docs = [entry["abstract"]]
-                for d in entry["ref_abstract"]["abstract"]:
-                    if len(d) > 0:
-                        all_docs.append(d)
-                tgt = entry["related_work"]
-                # remove all @cite_d
-                tgt = re.sub(r"\@cite_\d+", "cite", tgt)
-
-            elif ("duc" in self.dataset_name) or ("tac" in self.dataset_name):
-                all_docs = entry["document"]
-                tgt = entry["summary"][0]  # simply use the first gt summary
-            elif self.dataset_name == "wcep" or self.dataset_name == "arxiv":
-                all_docs = entry["document"]
-                tgt = entry["summary"]
-            elif self.dataset_name == "wikisum":
-                all_docs = entry["text"]
-                tgt = entry["tgt"]
+            all_docs = entry["document"]
+            tgt = entry["summary"]
             if self.join_method == "plain_concat":
                 src = "\n".join(all_docs)
                 input_ids = self.tokenizer.encode(
@@ -486,29 +463,7 @@ def collate_fn(batch):
 def get_dataloader_summ(
     args, hf_datasets, tokenizer, split_name, num_workers, is_train
 ):
-    if (
-        ("duc" in args.dataset_name)
-        or ("tac" in args.dataset_name)
-        or args.dataset_name == "wcep"
-        or args.dataset_name == "wikisum"
-    ):
-        d = hf_datasets
-    elif args.dataset_name == "arxiv":
-
-        d = [
-            {
-                "document": [" ".join(s) for s in single_data["sections"]],
-                "summary": " ".join(
-                    [
-                        sent.replace("<S>", "").replace("</S>", "").strip()
-                        for sent in single_data["abstract_text"]
-                    ]
-                ),
-            }
-            for single_data in hf_datasets
-        ]
-    else:
-        d = hf_datasets[split_name]
+    d = hf_datasets
     dataset = SummarizationDataset(
         hf_dataset=d,
         dataset_name=args.dataset_name,

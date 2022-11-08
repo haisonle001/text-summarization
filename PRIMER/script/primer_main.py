@@ -31,6 +31,8 @@ from dataloader import (
 import json
 from pathlib import Path
 from rouge import Rouge
+import py_vncorenlp
+rdrsegmenter = py_vncorenlp.VnCoreNLP(annotators=["wseg"], save_dir="/home/redboxsa_ml/sonlh/data-env")
 
 
 def label_smoothed_nll_loss(lprobs, target, epsilon, ignore_index=-100):
@@ -60,17 +62,15 @@ class PRIMERSummarizerLN(pl.LightningModule):
     def __init__(self, args):
         super(PRIMERSummarizerLN, self).__init__()
         self.args = args
-        # self.tokenizer = AutoTokenizer.from_pretrained(args.primer_path)
         self.tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-large")
         self.pad_token_id = self.tokenizer.pad_token_id
         config = LongformerEncoderDecoderConfig.from_pretrained(args.primer_path)
         config.gradient_checkpointing = args.grad_ckpt
         self.model = LEDForConditionalGeneration(config)
 
-
         self.use_ddp = args.accelerator == "ddp"
         self.docsep_token_id = self.tokenizer.convert_tokens_to_ids("<doc-sep>")
-        if args.mode=='pretrain' or args.mode=='test' or args.mode =='train':
+        if args.mode=='pretrain' or args.mode=='test' or args.mode =='train' or args.mode=='predict':
             # The special token is added after each document in the pre-processing step.
             self.tokenizer.add_special_tokens(
                 {"additional_special_tokens": ["<doc-sep>"]}
@@ -363,9 +363,50 @@ class PRIMERSummarizerLN(pl.LightningModule):
             logs = {"vloss": vloss}
             self.logger.log_metrics(logs, step=self.global_step)
             return {"vloss": vloss, "log": logs, "progress_bar": logs}
+    
+    def generate_predict(self, input_ids, gold_str):
+        input_ids, attention_mask = self._prepare_input(input_ids)
+        generated_ids = self.model.generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            use_cache=True,
+            max_length=self.args.max_length_tgt,
+            min_length=self.args.min_length_tgt,
+            num_beams=self.args.beam_size,
+            length_penalty=self.args.length_penalty,
+            no_repeat_ngram_size=3 ,
+        )
+        generated_str = self.tokenizer.batch_decode(
+            generated_ids.tolist(), skip_special_tokens=True
+        )
+        print(generated_str)
+
+        output_dir = os.path.join(
+            self.args.model_path,
+            "predicted_folder"    
+        )
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        idx = len(os.listdir(output_dir))
+
+        for ref, pred in zip(gold_str, generated_str):
+            with open(os.path.join(output_dir, "prediction.txt"), "w") as of:
+                of.write(pred)
+            with open(os.path.join(output_dir, "prediction.jsonl_5" ), "w", encoding="utf-8") as fo:
+                json.dump(pred, fo, ensure_ascii=False, indent=4)
+            idx += 1
+        return []
+
+    def prediction_step(self, batch, batch_idx):
+        input_ids, output_ids, tgt = batch
+        generate = self.generate_predict(input_ids, tgt)
+        return True
 
     def test_step(self, batch, batch_idx):
-        return self.validation_step(batch, batch_idx)
+        if self.args.mode=='predict':
+            return self.prediction_step(batch, batch_idx)
+        else:
+            return self.validation_step(batch, batch_idx)
 
     def test_epoch_end(self, outputs):
         tloss = torch.stack([x["vloss"] for x in outputs]).mean()
@@ -520,46 +561,18 @@ def train(args):
     )
 
     # load datasets
-    if args.dataset_name in ["multi_news", "multi_x_science_sum"]:
-        hf_datasets = load_dataset(args.dataset_name, cache_dir=args.data_path)
-        train_dataloader = get_dataloader_summ(
-            args, hf_datasets, model.tokenizer, "train", args.num_workers, True
-        )
-        valid_dataloader = get_dataloader_summ(
-            args, hf_datasets, model.tokenizer, "validation", args.num_workers, False
-        )
-    elif (
-        ("duc" in args.dataset_name)
-        or ("tac" in args.dataset_name)
-        or args.dataset_name == "wcep"
-        or args.dataset_name == "wikisum"
-    ):
-        # 20 data from duc2003
+    if os.path.isdir(args.data_path):
         dataset = torch.load(args.data_path + "train.pt")
-        train_dataloader = get_dataloader_summ(
-            args, dataset, model.tokenizer, "train", args.num_workers, True
-        )
-        # 10 data from duc2003
-        if os.path.exists(args.data_path + "val.pt"):
-            dataset = torch.load(args.data_path + "val.pt")
-        else:
-            dataset = torch.load(args.data_path + "valid.pt")
-        valid_dataloader = get_dataloader_summ(
-            args, dataset, model.tokenizer, "validation", args.num_workers, True
-        )
-    elif args.dataset_name == "arxiv":
-        with open(args.data_path + "train.txt", "r") as of:
-            all_lines = of.readlines()
-        dataset = [json.loads(l) for l in all_lines]
-        train_dataloader = get_dataloader_summ(
-            args, dataset, model.tokenizer, "train", args.num_workers, False
-        )
-        with open(args.data_path + "val.txt", "r") as of:
-            all_lines = of.readlines()
-        dataset = [json.loads(l) for l in all_lines]
-        valid_dataloader = get_dataloader_summ(
-            args, dataset, model.tokenizer, "validation", args.num_workers, False
-        )
+    train_dataloader = get_dataloader_summ(
+        args, dataset, model.tokenizer, "train", args.num_workers, True
+    )
+    if os.path.exists(args.data_path + "val.pt"):
+        dataset = torch.load(args.data_path + "val.pt")
+    else:
+         dataset = torch.load(args.data_path + "valid.pt")
+    valid_dataloader = get_dataloader_summ(
+        args, dataset, model.tokenizer, "validation", args.num_workers, True
+    )
     trainer.fit(model, train_dataloader, valid_dataloader)
     if args.test_imediate:
         args.resume_ckpt = checkpoint_callback.best_model_path
@@ -592,47 +605,59 @@ def test(args):
         model = PRIMERSummarizerLN(args)
 
     # load dataset
-    if args.dataset_name in ["multi_news", "multi_x_science_sum"]:
-        hf_datasets = load_dataset(args.dataset_name, cache_dir=args.data_path)
-        test_dataloader = get_dataloader_summ(
-            args, hf_datasets, model.tokenizer, "test", args.num_workers, False
-        )
-    elif (
-        ("duc" in args.dataset_name)
-        or ("tac" in args.dataset_name)
-        or args.dataset_name == "wcep"
-        or args.dataset_name == "wikisum"
-    ):
-        if os.path.isdir(args.data_path):
-            dataset = torch.load(args.data_path + "test.pt")
-        else:
-            dataset = torch.load(args.data_path)
-        test_dataloader = get_dataloader_summ(
-            args, dataset, model.tokenizer, "test", args.num_workers, False
-        )
-    elif args.dataset_name == "arxiv":
-        with open(args.data_path + "test.txt", "r") as of:
-            all_lines = of.readlines()
-        dataset = [json.loads(l) for l in all_lines]
-        test_dataloader = get_dataloader_summ(
-            args, dataset, model.tokenizer, "test", args.num_workers, False
-        )
-
+    if os.path.isdir(args.data_path):
+        dataset = torch.load(args.data_path + "test.pt")
+    else:
+        dataset = torch.load(args.data_path)
+    test_dataloader = get_dataloader_summ(
+        args, dataset, model.tokenizer, "test", args.num_workers, False
+    )
     # test
     trainer.test(model, test_dataloader)
 
+def predict(args):
+    if not args.resume_ckpt:
+        print("Resume checkpoint is not provided.")
+    else:
+        print("Loading PRIMER model ...")
+        model = PRIMERSummarizerLN.load_from_checkpoint(args.resume_ckpt, args=args)
+
+        docs = input("Enter documents separated by a <doc-sep>:\n")
+        docs = docs.split('<doc-sep>')
+        docs = [' '.join(rdrsegmenter.word_segment(doc)) for doc in docs]
+        print(docs)
+        dataset = {"document": docs, "summary": "_"}
+
+        test_dataloader = get_dataloader_summ(
+            args, dataset, model.tokenizer, "test", args.num_workers, False
+        )
+        args.compute_rouge = True
+        # initialize trainer
+        trainer = pl.Trainer(
+            gpus=args.gpus,
+            track_grad_norm=-1,
+            max_steps=args.total_steps * args.acc_batch,
+            replace_sampler_ddp=False,
+            log_every_n_steps=5,
+            checkpoint_callback=True,
+            progress_bar_refresh_rate=args.progress_bar_refresh_rate,
+            precision=32 if args.fp32 else 16,
+            accelerator=args.accelerator,
+            limit_test_batches=args.limit_test_batches if args.limit_test_batches else 1
+        )
+        trainer.test(model, test_dataloader)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     ########################
-    # Gneral
-    parser.add_argument("--gpus", default=0, type=int, help="number of gpus to use")
+    # General
+    parser.add_argument("--gpus", default=1, type=int, help="number of gpus to use")
     parser.add_argument(
-        "--accelerator", default=None, type=str, help="Type of accelerator"
+        "--accelerator", default='gpu', type=str, help="Type of accelerator"
     )
     parser.add_argument(
-        "--mode", default="train", choices=["pretrain", "train", "test","test_single_data"]
+        "--mode", default="test", choices=["pretrain", "train", "test","predict"]
     )
     parser.add_argument(
         "--debug_mode", action="store_true", help="set true if to debug"
@@ -641,6 +666,7 @@ if __name__ == "__main__":
         "--compute_rouge",
         action="store_true",
         help="whether to compute rouge in validation steps",
+        default=False,
     )
     parser.add_argument(
         "--saveRouge",
@@ -649,8 +675,9 @@ if __name__ == "__main__":
     )
 
     parser.add_argument("--progress_bar_refresh_rate", default=1, type=int)
+    ####
     parser.add_argument(
-        "--model_path", type=str, default="./longformer_summ_multinews/"
+        "--model_path", type=str, default="/home/redboxsa_ml/anh/PRIMER/longformer_summ_multinews"
     )
     parser.add_argument("--ckpt_path", type=str, default=None)
     parser.add_argument("--saveTopK", default=3, type=int)
@@ -661,8 +688,9 @@ if __name__ == "__main__":
         default=None,
     )
 
-    parser.add_argument("--data_path", type=str, default="../dataset/")
-    parser.add_argument("--dataset_name", type=str, default="multi_news")
+    ####
+    parser.add_argument("--data_path", type=str, default=" /home/redboxsa_ml/sonlh/vlsp-train-validation/")
+    parser.add_argument("--dataset_name", type=str, default="document")
     parser.add_argument("--tokenizer", type=str, default="facebook/bart-base")
     parser.add_argument(
         "--num_workers",
@@ -708,12 +736,13 @@ if __name__ == "__main__":
         default=0,
         help="seed for random sampling, useful for few shot learning",
     )
-    ########################
+        ########################
     # For training
+    ####
     parser.add_argument(
         "--primer_path",
         type=str,
-        default="../PRIMER/",
+        default="/home/redboxsa_ml/sonlh/PRIMERA_model/",
     )
     parser.add_argument(
         "--limit_valid_batches",
@@ -779,7 +808,7 @@ if __name__ == "__main__":
         default=None,
         help="Number of batches to test in the test mode.",
     )
-    parser.add_argument("--beam_size", type=int, default=1, help="size of beam search")
+    parser.add_argument("--beam_size", type=int, default=3, help="size of beam search")
     parser.add_argument(
         "--length_penalty",
         type=float,
@@ -826,5 +855,8 @@ if __name__ == "__main__":
         pretrain(args)
     elif args.mode == "train":
         train(args)
-    else:
+    elif args.mode == "test":
         test(args)
+    else:
+        predict(args)
+
