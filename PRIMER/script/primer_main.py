@@ -409,30 +409,33 @@ class PRIMERSummarizerLN(pl.LightningModule):
             return self.validation_step(batch, batch_idx)
 
     def test_epoch_end(self, outputs):
-        tloss = torch.stack([x["vloss"] for x in outputs]).mean()
-        self.log("tloss", tloss, sync_dist=True if self.use_ddp else False)
-        output_file = "test_%s_%d_%d" % (
-            self.args.dataset_name,
-            self.args.max_length_input,
-            self.args.max_length_tgt,
-        )
-        output_file = (
-            output_file
-            + "_fewshot_%d_%d" % (self.args.num_train_data, self.args.rand_seed)
-            if self.args.fewshot
-            else output_file
-        )
-        output_file = (
-            output_file + "_triblck" if self.args.applyTriblck else output_file
-        )
+        if self.args.mode!='predict':
+            tloss = torch.stack([x["vloss"] for x in outputs]).mean()
+            self.log("tloss", tloss, sync_dist=True if self.use_ddp else False)
+            output_file = "test_%s_%d_%d" % (
+                self.args.dataset_name,
+                self.args.max_length_input,
+                self.args.max_length_tgt,
+            )
+            output_file = (
+                output_file
+                + "_fewshot_%d_%d" % (self.args.num_train_data, self.args.rand_seed)
+                if self.args.fewshot
+                else output_file
+            )
+            output_file = (
+                output_file + "_triblck" if self.args.applyTriblck else output_file
+            )
 
-        names, metrics, avgr = self.compute_rouge_all(outputs, output_file=output_file)
-        metrics = [tloss, avgr] + metrics
-        names = ["tloss", "avgr"] + names
-        logs = dict(zip(*[names, metrics]))
-        self.logger.log_metrics(logs, step=self.global_step)
-        self.log("avgr", avgr)
-        return {"avg_test_loss": tloss, "avgr": avgr, "log": logs, "progress_bar": logs}
+            names, metrics, avgr = self.compute_rouge_all(outputs, output_file=output_file)
+            metrics = [tloss, avgr] + metrics
+            names = ["tloss", "avgr"] + names
+            logs = dict(zip(*[names, metrics]))
+            self.logger.log_metrics(logs, step=self.global_step)
+            self.log("avgr", avgr)
+            return {"avg_test_loss": tloss, "avgr": avgr, "log": logs, "progress_bar": logs}
+        else:
+            return 0
 
 
 def pretrain(args):
@@ -619,15 +622,16 @@ def predict(args):
     if not args.resume_ckpt:
         print("Resume checkpoint is not provided.")
     else:
-        print("Loading PRIMER model ...")
-        model = PRIMERSummarizerLN.load_from_checkpoint(args.resume_ckpt, args=args)
-
-        docs = input("Enter documents separated by a <doc-sep>:\n")
+        docs = input("Enter documents separated by <doc-sep>:\n")
         docs = docs.split('<doc-sep>')
+        print(docs)
+        #You can change the input to segmented
         docs = [' '.join(rdrsegmenter.word_segment(doc)) for doc in docs]
         print(docs)
-        dataset = {"document": docs, "summary": "_"}
-
+        dataset = [{"document": docs, "summary": "_"}]
+        print(dataset)
+        print("Loading PRIMER model ...")
+        model = PRIMERSummarizerLN.load_from_checkpoint(args.resume_ckpt, args=args)
         test_dataloader = get_dataloader_summ(
             args, dataset, model.tokenizer, "test", args.num_workers, False
         )
@@ -742,7 +746,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--primer_path",
         type=str,
-        default="/home/redboxsa_ml/sonlh/PRIMERA_model/",
+        default="/PRIMERA_model/",
     )
     parser.add_argument(
         "--limit_valid_batches",

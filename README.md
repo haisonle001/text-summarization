@@ -1,2 +1,67 @@
-# text-summarization
+# PRIMERA for Vietnamese
+We use the official code for PRIMERA: Pyramid-based Masked Sentence Pre-training for Multi-document Summarization from [PRIMERA](https://github.com/allenai/PRIMER)
+
+PRIMERA is a pre-trained model for multi-document representation with focus on summarization that reduces the need for dataset-specific architectures and large amounts of fine-tuning labeled data. With extensive experiments on 6 multi-document summarization datasets from 3 different domains on the zero-shot, few-shot and full-supervised settings, PRIMER outperforms  current state-of-the-art models on most of these settings with large margins.
  
+
+## Set up
+1. Create new virtual environment by
+```
+conda create --name primer python=3.7
+conda activate primer
+conda install cudatoolkit=10.0
+
+```
+2. Install requirements to run the summarization scripts by 
+```
+pip install -r primer_requirements.txt
+```
+
+
+## Summarization Scripts
+You can use `script/primer_main.py` for pre-train/train/test/predict PRIMERA
+You can change these line in `script/primer_main.py` to your personal dir
+``` 
+Line 35: rdrsegmenter = py_vncorenlp.VnCoreNLP(annotators=["wseg"], save_dir= /your-save-dir/)
+Line 684: "--model_path", type=str, default=  /your-model-path/
+Line 696: "--data_path", type=str, default= /your-data-path/
+Line 749: "--primer_path", type=str, default= /your-primer-path/
+```
+
+```
+Pre-train:
+python script/primer_main.py --mode pretrain  --test_imediate  --data_path /your-data-path/ --dataset_name /your-dataset-name/
+```
+
+```
+Train:
+python script/primer_main.py --mode train --data_path  /your-data-path/ --resume_ckpt /your-checkpoint-path/
+```
+
+```
+Test:
+python script/primer_main.py --mode test --data_path  /your-data-path/ --resume_ckpt /your-checkpoint-path/
+```
+
+```
+python script/primer_main.py --mode predict  --resume_ckpt /your-checkpoint-path/
+```
+
+## Datasets
+```
+- Pre-train format: [{"src:[...], 'tgt':[]},{"src:[...], 'tgt':[]}, ...]
+- Train/test format: [{'document':[...], 'summary':[...]}, {'document':[...], 'summary':[...]}, ...]
+```
+
+
+## Pre-training Data Generation
+Install data requirements to run the data generation scripts (you should create new virtual environment):
+```
+pip install -r data_requirements.txt
+```
+
+You can use `utils/pretrain_preprocess.py` to generate pre-training data. 
+1. Generate data with scores and entities with `--mode compute_all_scores` 
+2. Generate pre-training data with `--mode pretraining_data_with_score`:
+    - Pegasus: `--strategy greedy --metric pegasus_score`
+    - Entity_Pyramid: `--strategy greedy_entity_pyramid --metric pyramid_rouge`
