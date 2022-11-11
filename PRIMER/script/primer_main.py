@@ -32,7 +32,7 @@ import json
 from pathlib import Path
 from rouge import Rouge
 import py_vncorenlp
-rdrsegmenter = py_vncorenlp.VnCoreNLP(annotators=["wseg"], save_dir="/home/redboxsa_ml/sonlh/data-env")
+rdrsegmenter = py_vncorenlp.VnCoreNLP(annotators=["wseg"], save_dir="C:/Work/NLP/PRIMER")
 
 
 def label_smoothed_nll_loss(lprobs, target, epsilon, ignore_index=-100):
@@ -390,7 +390,7 @@ class PRIMERSummarizerLN(pl.LightningModule):
         idx = len(os.listdir(output_dir))
 
         for ref, pred in zip(gold_str, generated_str):
-            with open(os.path.join(output_dir, "prediction.txt"), "w") as of:
+            with open(os.path.join(output_dir, "prediction.txt"), "w", encoding="utf-8") as of:
                 of.write(pred)
             with open(os.path.join(output_dir, "prediction.jsonl_5" ), "w", encoding="utf-8") as fo:
                 json.dump(pred, fo, ensure_ascii=False, indent=4)
@@ -681,7 +681,7 @@ if __name__ == "__main__":
     parser.add_argument("--progress_bar_refresh_rate", default=1, type=int)
     ####
     parser.add_argument(
-        "--model_path", type=str, default="/home/redboxsa_ml/anh/PRIMER/longformer_summ_multinews"
+        "--model_path", type=str, default="."
     )
     parser.add_argument("--ckpt_path", type=str, default=None)
     parser.add_argument("--saveTopK", default=3, type=int)
@@ -693,7 +693,7 @@ if __name__ == "__main__":
     )
 
     ####
-    parser.add_argument("--data_path", type=str, default=" /home/redboxsa_ml/sonlh/vlsp-train-validation/")
+    parser.add_argument("--data_path", type=str, default=".")
     parser.add_argument("--dataset_name", type=str, default="document")
     parser.add_argument("--tokenizer", type=str, default="facebook/bart-base")
     parser.add_argument(
@@ -746,7 +746,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--primer_path",
         type=str,
-        default="/PRIMERA_model/",
+        default="C:/Work/NLP/PRIMERA-github/text-summarization/PRIMER/PRIMER_model",
     )
     parser.add_argument(
         "--limit_valid_batches",

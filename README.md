@@ -10,7 +10,6 @@ PRIMERA is a pre-trained model for multi-document representation with focus on s
 conda create --name primer python=3.7
 conda activate primer
 conda install cudatoolkit=10.0
-
 ```
 2. Install requirements to run the summarization scripts by 
 ```
@@ -19,8 +18,8 @@ pip install -r primer_requirements.txt
 
 
 ## Summarization Scripts
-You can use `script/primer_main.py` for pre-train/train/test/predict PRIMERA
-You can change these line in `script/primer_main.py` to your personal dir
+You can use `script/primer_main.py` for pre-train/train/test/predict PRIMERA.
+You can change these line in `script/primer_main.py` to your personal dir.
 ``` 
 Line 35: rdrsegmenter = py_vncorenlp.VnCoreNLP(annotators=["wseg"], save_dir= /your-save-dir/)
 Line 684: "--model_path", type=str, default=  /your-model-path/
@@ -44,6 +43,7 @@ python script/primer_main.py --mode test --data_path  /your-data-path/ --resume_
 ```
 
 ```
+Predict:
 python script/primer_main.py --mode predict  --resume_ckpt /your-checkpoint-path/
 ```
 
