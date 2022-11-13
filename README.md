@@ -16,15 +16,29 @@ conda install cudatoolkit=10.0
 pip install -r primer_requirements.txt
 ```
 
+## Download fine-tuned model checkpoints
+Pretrained on NewsCorpus and fine-tuned on ViMS: [here]()
+
+Pretrained on NewsCorpus and fine-tuned on VMDS: [here]()
+
+Pretrained on NewsCorpus and fine-tuned on ViMs + VMDS + VLSP: [here]()
+
 
 ## Summarization Scripts
 You can use `script/primer_main.py` for pre-train/train/test/predict PRIMERA.
+
 You can change these line in `script/primer_main.py` to your personal dir.
+
 ``` 
 Line 35: rdrsegmenter = py_vncorenlp.VnCoreNLP(annotators=["wseg"], save_dir= /your-save-dir/)
 Line 684: "--model_path", type=str, default=  /your-model-path/
 Line 696: "--data_path", type=str, default= /your-data-path/
 Line 749: "--primer_path", type=str, default= /your-primer-path/
+```
+
+```
+Predict:
+python script/primer_main.py --mode predict  --resume_ckpt /your-checkpoint-path/
 ```
 
 ```
@@ -42,10 +56,7 @@ Test:
 python script/primer_main.py --mode test --data_path  /your-data-path/ --resume_ckpt /your-checkpoint-path/
 ```
 
-```
-Predict:
-python script/primer_main.py --mode predict  --resume_ckpt /your-checkpoint-path/
-```
+
 
 ## Datasets
 ```
@@ -56,6 +67,7 @@ python script/primer_main.py --mode predict  --resume_ckpt /your-checkpoint-path
 
 ## Pre-training Data Generation
 Install data requirements to run the data generation scripts (you should create new virtual environment):
+
 ```
 pip install -r data_requirements.txt
 ```
@@ -63,5 +75,4 @@ pip install -r data_requirements.txt
 You can use `utils/pretrain_preprocess.py` to generate pre-training data. 
 1. Generate data with scores and entities with `--mode compute_all_scores` 
 2. Generate pre-training data with `--mode pretraining_data_with_score`:
-    - Pegasus: `--strategy greedy --metric pegasus_score`
     - Entity_Pyramid: `--strategy greedy_entity_pyramid --metric pyramid_rouge`
