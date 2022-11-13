@@ -1,7 +1,9 @@
 # PRIMERA for Vietnamese
-We use the official code for PRIMERA: Pyramid-based Masked Sentence Pre-training for Multi-document Summarization from [PRIMERA](https://github.com/allenai/PRIMER), pretrain and fine-tune it on Vietnamese news datasets.
+We use the official code for PRIMERA: Pyramid-based Masked Sentence Pre-training for Multi-document Summarization from [PRIMERA](https://github.com/allenai/PRIMER).
 
 PRIMERA is a pre-trained model for multi-document representation with focus on summarization that reduces the need for dataset-specific architectures and large amounts of fine-tuning labeled data. With extensive experiments on 6 multi-document summarization datasets from 3 different domains on the zero-shot, few-shot and full-supervised settings, PRIMER outperforms current state-of-the-art models on most of these settings with large margins on English datasets.
+
+We experience PRIMERA by pretraining and fine-tuning on Vietnamese news datasets.
  
 
 ## Set up
