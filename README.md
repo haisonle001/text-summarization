@@ -75,9 +75,10 @@ pip install -r data_requirements.txt
 ```
 
 You can use `utils/pretrain_preprocess.py` to generate pre-training data. 
-'''
+
+```
 python utils/pretrain_preprocess.py --input_dir=/your-input-path/ --output_dir=/your-output-path/
-'''
+```
 1. Generate data with scores and entities with `--mode compute_all_scores` 
 2. Generate pre-training data with `--mode pretraining_data_with_score`:
     - Entity_Pyramid: `--strategy greedy_entity_pyramid --metric pyramid_rouge`
