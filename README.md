@@ -5,7 +5,7 @@ PRIMERA is a pre-trained model for multi-document representation with focus on s
 
 We experience PRIMERA by pretraining and fine-tuning on Vietnamese news datasets.
  
-| PRIMERA | Rouge-1 F1 | Rouge-2 F1 | Rouge-L F1 | AVG.R F1 |
+| Dataset | Rouge-1 F1 | Rouge-2 F1 | Rouge-L F1 | AVG.R F1 |
 | ----------- | ----------- |----------- |----------- |----------- |
 | VMDS | 73.6 | 44.1 | 41.0 | 52.9 |
 | ViMS | 74.7 | 45.6 | 40.7 | 53.7 | 
